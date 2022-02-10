@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useForm, SubmitHandler } from "react-hook-form";
-import { getStorage, uploadBytesResumable, getDownloadURL, ref as refstorage } from "firebase/storage";
 import MessageBox from './components/MessageBox';
 import ReCaptcha from './components/ReCaptcha';
 import Input from './components/Input';
@@ -10,13 +9,14 @@ import CustomUpload from './components/CustomUpload';
 import image from './images/image.png';
 import './Firebase/Firebase';
 import './App.css';
+import axios from 'axios';
 
 
 
 type Inputs = {
   fullName: string,
   email: string,
-  resume: any,
+  resume: string,
   company: string,
   phone: string,
   cC: string,
@@ -35,7 +35,7 @@ function App() {
   const defaultValues = {
     fullName: '',
     email: '',
-    resume: undefined,
+    resume: '',
     company: '',
     phone: '',
     cC: '',
@@ -46,52 +46,50 @@ function App() {
 
   const { register, handleSubmit, watch, formState: { errors }, reset } = useForm({ defaultValues });
 
-  const onSubmit: SubmitHandler<Inputs> = (data) => {
+  const onSubmit: SubmitHandler<Inputs> = async (data) => {
+
     if (isVerified) {
+      setIsSending(true);
 
-      setIsSending((prev) => !prev);
-      const myHeaders = new Headers();
-      myHeaders.append("Content-Type", "application/json");
+      let fd = new FormData()
+      fd.append('files', data.resume[0])
 
-      const raw = JSON.stringify({
-        "data": {
-          "fullName": data.fullName,
-          "email": data.email,
-          "cC": data.cC,
-          "phone": data.phone,
-          "gender": data.gender,
-          "resume": "Resume Url",
-          "company": data.company,
-          "link": data.link,
-          "info": data.info
-        }
-      });
-
-      fetch("http://localhost:1337/api/form-datas", {
-        method: 'POST',
-        headers: myHeaders,
-        body: raw,
-        redirect: 'follow'
+      const fileUploadRes = await axios({
+        method: "POST",
+        url: 'http://localhost:1337/api/upload',
+        data: fd
       })
-        .then(response => response.json())
-        .then(result => {
-          console.log(result)
-          setIsSending(false);
-          setShowMessageBox(true);
-          reset(defaultValues)
-        })
-        .catch(error => console.log('error', error));
+      console.log(fileUploadRes.data[0]);
 
+      const dataUploadRes = await axios({
+        method: "POST",
+        url: 'http://localhost:1337/api/form-datas',
+        data: {
+          data: {
+            fullName: data.fullName,
+            email: data.email,
+            resume: fileUploadRes.data[0],
+            cC: data.cC,
+            phone: data.phone,
+            link: data.link,
+            info: data.info,
+            gender: data.gender
+          }
+        }
+      })
+      setShowMessageBox(true);
+      setIsSending(false);
+      reset(defaultValues)
+      console.log(dataUploadRes);
     }
   }
-
-
 
   const onClose = () => {
     setShowMessageBox(false);
   }
 
   const resumeFile = watch("resume");
+
 
   return (<div className="app">
     <header>
